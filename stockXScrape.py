@@ -1,8 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import random
-import time
-from selenium import webdriver
+import pandas as pd
 
 # List of User-Agent strings for different browsers
 user_agents = [
@@ -11,49 +10,44 @@ user_agents = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15"
 ]
 
-# List of proxy servers
 proxies = [
     'http://50.175.212.66',
     'http://96.113.159.162'
 ]
 
-base_url = 'https://stockx.com/sneakers?page={}'
+base_url = 'https://stockx.com/sneakers?page=1'
 headers = {'User-Agent': random.choice(user_agents)}
 
-# Function to fetch page content with retries and delays
+# Function to fetch page content
 def fetch_page(url):
-    for _ in range(3):  # Retry up to 3 times
-        try:
-            response = requests.get(url, headers=headers, proxies={'http': random.choice(proxies)})
-            if response.status_code == 200:
-                return response.content
-        except Exception as e:
-            print("Error:", e)
-        time.sleep(random.uniform(1, 3))  # Add random delay between retries
-
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.content
+    except Exception as e:
+        print("Error:", e)
     return None
 
 # Scraping logic
 product_links = []
 
-for page_num in range(1, 2):
-    url = base_url.format(page_num)
-    content = fetch_page(url)
-    
-    if content:
-        soup = BeautifulSoup(content, 'html.parser')
-        divs = soup.find_all('div', class_='css-jurd7a')
+content = fetch_page(base_url)
+if content:
+    soup = BeautifulSoup(content, 'html.parser')
+    divs = soup.find_all('div', class_='css-jurd7a')
 
-        for div in divs:
-            a_tag = div.find('a', {'data-testid': 'productTile-ProductSwitcherLink'})
-            if a_tag:
-                link = a_tag.get('href')
-                product_links.append('https://stockx.com' + link)
-        print("List of Links:")
-        for link in product_links:
-            print(link)
-    else:
-        print("Failed to retrieve the webpage.")
+    for div in divs:
+        a_tag = div.find('a', {'data-testid': 'productTile-ProductSwitcherLink'})
+        if a_tag:
+            link = a_tag.get('href')
+            product_links.append('https://stockx.com' + link)
+            if len(product_links) >= 64:  # Stop when 64 items are reached
+                break
+    print("List of Links:")
+    for link in product_links:
+        print(link)
+else:
+    print("Failed to retrieve the webpage.")
 
 sneakers_data = []
 
@@ -84,23 +78,9 @@ for product_link in product_links:
             })
     else:
         print(f"Failed to fetch {product_link}")
-    time.sleep(5)
 
-def scrape_last_sale_price(url):
-    driver = webdriver.Chrome()
-    driver.get(url)
-    time.sleep(5) 
-    html_content = driver.page_source
-    driver.quit()
+# Convert the list of dictionaries into a DataFrame
+df = pd.DataFrame(sneakers_data)
 
-    soup = BeautifulSoup(html_content, 'html.parser')
-    last_sold_element = soup.find('p', class_='chakra-text css-1q8ctst')
-    last_sold = last_sold_element.text.strip() if last_sold_element else "Last sale price not found"
-    return last_sold
-
-for sneaker in sneakers_data:
-    last_sale_price = scrape_last_sale_price(sneaker['product_link'])
-    sneaker['last_sale_price'] = last_sale_price
-
-print(sneakers_data)
-
+# Display the DataFrame
+print(df)
